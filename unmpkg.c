@@ -22,7 +22,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-char fnamel[1024][1024];
+#include "mpkg.h"
 
 long get_file_size(const char *filename) {
   FILE *file = fopen(filename, "rb");
@@ -72,9 +72,8 @@ int main(int argc, char *argv[]) {
   }
 
   FILE *file;
-  int data;
+  MPKGHeader mpkg_header;
   size_t result;
-  memset(fnamel, 0x00, sizeof(fnamel));
 
   file = fopen(argv[1], "rb");
   if (file == NULL) {
@@ -82,83 +81,77 @@ int main(int argc, char *argv[]) {
     return -1;
   }
 
-  result = fread(&data, 4, 1, file);
+  // read mpkgfile header
+  result = fread(&mpkg_header, sizeof(mpkg_header), 1, file);
   if (result != 1) {
     perror("Error reading file");
     fclose(file);
     return -1;
   }
-  printf("Version Long: %d\n", data);
-  char ver[data + 1];
-  memset(ver, 0x00, sizeof(ver));
-  fread(ver, 8, 1, file);
-  printf("Version : %s\n", ver);
+  printf("Version Long: %u\n", mpkg_header.version_length);
+  printf("Version : %s\n", mpkg_header.version);
+  printf("Num of file : %u\n", mpkg_header.file_total);
 
-  int nof;
-  fread(&nof, 4, 1, file);
-  printf("Num of file : %d\n", nof);
+  // read mpkgfile entries
+  MPKGFileEntry *mpkg_files = (MPKGFileEntry*) malloc(
+    mpkg_header.file_total * sizeof(MPKGFileEntry)
+  );
+  for (int i = 0; i < mpkg_header.file_total; i++) {
+    fread(
+      &(mpkg_files[i].file_name_length),
+      4, 1, file
+    );
+    fread(
+      &(mpkg_files[i].file_name),
+      mpkg_files[i].file_name_length,
+      1, file
+    );
+    fread(
+      &(mpkg_files[i].index),
+      4, 1, file
+    );
+    fread(
+      &(mpkg_files[i].file_size),
+      4, 1, file
+    );
 
-  long long *file_long = malloc(nof * sizeof(long long));
-  for (int i = 0; i < nof; i++) {
-    int name_long;
-    fread(&name_long, 4, 1, file);
-    printf("\nName long : %d\n", name_long);
+    printf("\nName long : %u\n", mpkg_files[i].file_name_length);
+    printf("Name : %s\n", mpkg_files[i].file_name);
+    printf("File long : %u\n", mpkg_files[i].file_size);
+  }
 
-    // char fnamel[nof][name_long + 1];
-    //   memset(fnamel, 0x00, sizeof(fnamel));
-    fread(fnamel[i], name_long, 1, file);
-    printf("Name : %s\n", fnamel[i]);
-
-    // move file ptr down 4 bytes
-    if (fseek(file, 4, SEEK_CUR) != 0) {
-	    free(file_long);
-      perror("Error seeking in file");
-      fclose(file);
+  // copy files from mpkgfile
+  int s;
+  for (int i = 0; i < mpkg_header.file_total; i++) {
+    //  printf("DEBUG PATH:%s\nDEBUG INFO: L is %d\n", mpkg_files[i].file_name, i);
+    char *buf;
+    buf = (char *)malloc(mpkg_files[i].file_size + 1);
+    fread(buf, mpkg_files[i].file_size, 1, file);
+    s = create_dir_recursive(mpkg_files[i].file_name);
+    if (s == -1) {
+      perror("create dir failed");
       return -1;
     }
 
-    fread(file_long + i, sizeof(int), 1, file);
-    printf("File long : %lld\n", file_long[i]);
-    /*   for (int a = 0; a < nof; a++) {
-         printf("File long : %d\n", file_long[a]);
-       }*/
-
-    if (i == nof - 1) {
-      //   printf("DEBUG INFO: into write\n");
-      int s;
-      for (int l = 0; l < nof; l++) {
-        //  printf("DEBUG PATH:%s\nDEBUG INFO: L is %d\n", fnamel[l], l);
-        if (fnamel[l] == NULL) {
-          continue;
-        }
-        char *buf;
-        buf = (char *)malloc(file_long[l] + 1);
-        fread(buf, file_long[l], 1, file);
-        s = create_dir_recursive(fnamel[l]);
-        if (s == -1) {
-          perror("create dir failed");
-          return -1;
-        }
-        FILE *wfile;
-        wfile = fopen(fnamel[l], "wb");
-        if (wfile == NULL) {
-          perror("Error opening file");
-          return EXIT_FAILURE;
-        }
-
-        size_t bytes_written;
-        bytes_written = fwrite(buf, file_long[l], 1, wfile);
-        if (bytes_written != 1) {
-          perror("Error writing to file");
-          fclose(wfile);
-          return EXIT_FAILURE;
-        }
-        free(buf);
-        fclose(wfile);
-      }
+    FILE *wfile;
+    wfile = fopen(mpkg_files[i].file_name, "wb");
+    if (wfile == NULL) {
+      perror("Error opening file");
+      return EXIT_FAILURE;
     }
+
+    size_t bytes_written;
+    bytes_written = fwrite(buf, mpkg_files[i].file_size, 1, wfile);
+    if (bytes_written != 1) {
+      perror("Error writing to file");
+      fclose(wfile);
+      return EXIT_FAILURE;
+    }
+
+    free(buf);
+    fclose(wfile);
   }
-  free(file_long);
+  free(mpkg_files);
   fclose(file);
   return 0;
 }

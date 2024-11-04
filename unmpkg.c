@@ -24,134 +24,121 @@
 
 #include "mpkg.h"
 
-long get_file_size(const char *filename) {
-  FILE *file = fopen(filename, "rb");
-  if (file == NULL) {
-    perror("Error opening file for size check");
-    return -1;
-  }
-  long size;
-  fseek(file, 0, SEEK_END);
-  size = ftell(file);
-  rewind(file);
-  fclose(file);
-  return size;
+long get_file_size(const char *filename)
+{
+	FILE *file = fopen(filename, "rb");
+	if (file == NULL) {
+		perror("Error opening file for size check");
+		return -1;
+	}
+	long size;
+	fseek(file, 0, SEEK_END);
+	size = ftell(file);
+	rewind(file);
+	fclose(file);
+	return size;
 }
 
-int create_dir_recursive(const char *path) {
-  char *cpy_path = strdup(path);
-  if (!cpy_path) {
-    perror("strdup failed");
-    return -1;
-  }
+int create_dir_recursive(const char *path)
+{
+	char *cpy_path = strdup(path);
+	if (!cpy_path) {
+		perror("strdup failed");
+		return -1;
+	}
 
-  char *cur_path = cpy_path;
-  while (*cur_path) {
-    if (*cur_path == '/') {
-      *cur_path = '\0';  // temp cut dir to create
-      if (mkdir(cpy_path, 0777) == -1 &&
-          errno != EEXIST) {  // check dir is exists.
-        free(cpy_path);
-        return -1;
-      }
-      *cur_path = '/';
-    }
-    cur_path++;
-  }
+	char *cur_path = cpy_path;
+	while (*cur_path) {
+		if (*cur_path == '/') {
+			*cur_path = '\0'; // temp cut dir to create
+			if (mkdir(cpy_path, 0777) == -1 && errno != EEXIST) { // check dir is exists.
+				free(cpy_path);
+				return -1;
+			}
+			*cur_path = '/';
+		}
+		cur_path++;
+	}
 
-  free(cpy_path);
-  return 0;
+	free(cpy_path);
+	return 0;
 }
 
-int main(int argc, char *argv[]) {
-  if (argc < 2) {
-    fprintf(stderr, "Usage: %s <filename>\n", argv[0]);
-    fprintf(stderr, "A tool decode the wallpaper engine's mpkg file.\n");
-    fprintf(stderr, "Example: %s test.mpkg\n", argv[0]);
-    return EXIT_FAILURE;
-  }
+int main(int argc, char *argv[])
+{
+	if (argc < 2) {
+		fprintf(stderr, "Usage: %s <filename>\n", argv[0]);
+		fprintf(stderr, "A tool decode the wallpaper engine's mpkg file.\n");
+		fprintf(stderr, "Example: %s test.mpkg\n", argv[0]);
+		return EXIT_FAILURE;
+	}
 
-  FILE *file;
-  MPKGHeader mpkg_header;
-  size_t result;
+	FILE *file;
+	MPKGHeader mpkg_header;
+	size_t result;
 
-  file = fopen(argv[1], "rb");
-  if (file == NULL) {
-    perror("Error opening file");
-    return -1;
-  }
+	file = fopen(argv[1], "rb");
+	if (file == NULL) {
+		perror("Error opening file");
+		return -1;
+	}
 
-  // read mpkgfile header
-  result = fread(&mpkg_header, sizeof(mpkg_header), 1, file);
-  if (result != 1) {
-    perror("Error reading file");
-    fclose(file);
-    return -1;
-  }
-  printf("Version Long: %u\n", mpkg_header.version_length);
-  printf("Version : %s\n", mpkg_header.version);
-  printf("Num of file : %u\n", mpkg_header.file_total);
+	// read mpkgfile header
+	result = fread(&mpkg_header, sizeof(mpkg_header), 1, file);
+	if (result != 1) {
+		perror("Error reading file");
+		fclose(file);
+		return -1;
+	}
+	printf("Version Long: %u\n", mpkg_header.version_length);
+	printf("Version : %s\n", mpkg_header.version);
+	printf("Num of file : %u\n", mpkg_header.file_total);
 
-  // read mpkgfile entries
-  MPKGFileEntry *mpkg_files = (MPKGFileEntry*) malloc(
-    mpkg_header.file_total * sizeof(MPKGFileEntry)
-  );
-  for (int i = 0; i < mpkg_header.file_total; i++) {
-    fread(
-      &(mpkg_files[i].file_name_length),
-      4, 1, file
-    );
-    fread(
-      &(mpkg_files[i].file_name),
-      mpkg_files[i].file_name_length,
-      1, file
-    );
-    fread(
-      &(mpkg_files[i].index),
-      4, 1, file
-    );
-    fread(
-      &(mpkg_files[i].file_size),
-      4, 1, file
-    );
+	// read mpkgfile entries
+	MPKGFileEntry *mpkg_files = (MPKGFileEntry *)malloc(mpkg_header.file_total * sizeof(MPKGFileEntry));
+	for (int i = 0; i < mpkg_header.file_total; i++) {
+		fread(&(mpkg_files[i].file_name_length), 4, 1, file);
+		fread(&(mpkg_files[i].file_name), mpkg_files[i].file_name_length, 1, file);
+		fread(&(mpkg_files[i].index), 4, 1, file);
+		fread(&(mpkg_files[i].file_size), 4, 1, file);
 
-    printf("\nName long : %u\n", mpkg_files[i].file_name_length);
-    printf("Name : %s\n", mpkg_files[i].file_name);
-    printf("File long : %u\n", mpkg_files[i].file_size);
-  }
+		printf("\nName long : %u\n", mpkg_files[i].file_name_length);
+		printf("Name : %s\n", mpkg_files[i].file_name);
+		printf("File long : %u\n", mpkg_files[i].file_size);
+	}
 
-  // copy files from mpkgfile
-  int s;
-  for (int i = 0; i < mpkg_header.file_total; i++) {
-    //  printf("DEBUG PATH:%s\nDEBUG INFO: L is %d\n", mpkg_files[i].file_name, i);
-    char *buf;
-    buf = (char *)malloc(mpkg_files[i].file_size + 1);
-    fread(buf, mpkg_files[i].file_size, 1, file);
-    s = create_dir_recursive(mpkg_files[i].file_name);
-    if (s == -1) {
-      perror("create dir failed");
-      return -1;
-    }
+	// copy files from mpkgfile
+	int s;
+	for (int i = 0; i < mpkg_header.file_total; i++) {
+		//  printf("DEBUG PATH:%s\nDEBUG INFO: L is %d\n", mpkg_files[i].file_name, i);
+		char *buf;
+		buf = (char *)malloc(mpkg_files[i].file_size + 1);
+		fread(buf, mpkg_files[i].file_size, 1, file);
+		s = create_dir_recursive(mpkg_files[i].file_name);
+		if (s == -1) {
+			perror("create dir failed");
+			return -1;
+		}
 
-    FILE *wfile;
-    wfile = fopen(mpkg_files[i].file_name, "wb");
-    if (wfile == NULL) {
-      perror("Error opening file");
-      return EXIT_FAILURE;
-    }
+		FILE *wfile;
+		wfile = fopen(mpkg_files[i].file_name, "wb");
+		if (wfile == NULL) {
+			perror("Error opening file");
+			return EXIT_FAILURE;
+		}
 
-    size_t bytes_written;
-    bytes_written = fwrite(buf, mpkg_files[i].file_size, 1, wfile);
-    if (bytes_written != 1) {
-      perror("Error writing to file");
-      fclose(wfile);
-      return EXIT_FAILURE;
-    }
+		size_t bytes_written;
+		bytes_written = fwrite(buf, mpkg_files[i].file_size, 1, wfile);
+		if (bytes_written != 1) {
+			perror("Error writing to file");
+			fclose(wfile);
+			return EXIT_FAILURE;
+		}
 
-    free(buf);
-    fclose(wfile);
-  }
-  free(mpkg_files);
-  fclose(file);
-  return 0;
+		free(buf);
+		fclose(wfile);
+	}
+	free(mpkg_files);
+	fclose(file);
+	return 0;
 }

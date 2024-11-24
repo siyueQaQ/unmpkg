@@ -39,6 +39,20 @@ long get_file_size(const char *filename)
 	return size;
 }
 
+void load_entry(FILE *file, int total, MPKGFileEntry *mpkg_files)
+{
+	for (int i = 0; i < total; i++) {
+		fread(&(mpkg_files[i].file_name_length), 4, 1, file);
+		fread(&(mpkg_files[i].file_name), mpkg_files[i].file_name_length, 1, file);
+		fread(&(mpkg_files[i].index), 4, 1, file);
+		fread(&(mpkg_files[i].file_size), 4, 1, file);
+
+		printf("\nName long : %u\n", mpkg_files[i].file_name_length);
+		printf("Name : %s\n", mpkg_files[i].file_name);
+		printf("File long : %u\n", mpkg_files[i].file_size);
+	}
+}
+
 int create_dir_recursive(const char *path)
 {
 	char *cpy_path = strdup(path);
@@ -67,15 +81,15 @@ int create_dir_recursive(const char *path)
 int main(int argc, char *argv[])
 {
 	if (argc < 2) {
-		fprintf(stderr, "Usage: %s <filename>\n", argv[0]);
 		fprintf(stderr, "A tool decode the wallpaper engine's mpkg file.\n");
-		fprintf(stderr, "Example: %s test.mpkg\n", argv[0]);
+		fprintf(stderr, "Usage: %s <filename>\n", argv[0]);
 		return EXIT_FAILURE;
 	}
 
 	FILE *file;
 	MPKGHeader mpkg_header;
 	size_t result;
+	int cdr;
 
 	file = fopen(argv[1], "rb");
 	if (file == NULL) {
@@ -96,26 +110,15 @@ int main(int argc, char *argv[])
 
 	// read mpkgfile entries
 	MPKGFileEntry *mpkg_files = (MPKGFileEntry *)malloc(mpkg_header.file_total * sizeof(MPKGFileEntry));
-	for (int i = 0; i < mpkg_header.file_total; i++) {
-		fread(&(mpkg_files[i].file_name_length), 4, 1, file);
-		fread(&(mpkg_files[i].file_name), mpkg_files[i].file_name_length, 1, file);
-		fread(&(mpkg_files[i].index), 4, 1, file);
-		fread(&(mpkg_files[i].file_size), 4, 1, file);
-
-		printf("\nName long : %u\n", mpkg_files[i].file_name_length);
-		printf("Name : %s\n", mpkg_files[i].file_name);
-		printf("File long : %u\n", mpkg_files[i].file_size);
-	}
-
+	load_entry(file, mpkg_header.file_total, mpkg_files);
 	// copy files from mpkgfile
-	int s;
+
 	for (int i = 0; i < mpkg_header.file_total; i++) {
-		//  printf("DEBUG PATH:%s\nDEBUG INFO: L is %d\n", mpkg_files[i].file_name, i);
 		char *buf;
 		buf = (char *)malloc(mpkg_files[i].file_size + 1);
 		fread(buf, mpkg_files[i].file_size, 1, file);
-		s = create_dir_recursive(mpkg_files[i].file_name);
-		if (s == -1) {
+		cdr = create_dir_recursive(mpkg_files[i].file_name);
+		if (cdr == -1) {
 			perror("create dir failed");
 			return -1;
 		}

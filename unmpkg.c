@@ -105,7 +105,7 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 	printf("Version Long: %u\n", mpkg_header.version_length);
-	printf("Version : %s\n", mpkg_header.version);
+	printf("Version : %.8s\n", mpkg_header.version);
 	printf("Num of file : %u\n", mpkg_header.file_total);
 
 	// read mpkgfile entries

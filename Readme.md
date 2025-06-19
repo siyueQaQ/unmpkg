@@ -19,3 +19,5 @@ Usage: unmpkg <filename>
 A tool for decoding the wallpaper engine's mpkg file.
 Example: unmpkg test.mpkg
 ```
+### Others
+If you want to decode '.tex' file,you can see [repkg](https://github.com/notscuffed/repkg).
